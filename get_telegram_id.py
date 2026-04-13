@@ -2,7 +2,7 @@ import requests
 import time
 
 # เอา Token ที่ได้จาก BotFather มาใส่ตรงนี้
-TOKEN = "8429667497:AAHW1bLcJJCgfSPBc_Qg6ZZB7cq-9Jd17Mo"
+TOKEN = "7957078815:AAEsoM5WMWoYCZv41NvSewa6N9NpLRHgYUM"
 
 def get_chat_id():
     url = f"https://api.telegram.org/bot{TOKEN}/getUpdates"
