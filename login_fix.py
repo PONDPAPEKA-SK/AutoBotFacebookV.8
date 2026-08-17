@@ -3,12 +3,17 @@ import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 
+from uploader import safe_profile_path
+
 def manual_login(profile_name="bot_brain"):
     print(f"--- MANUAL LOGIN TOOL (Profile: {profile_name}) ---")
 
-    # ตั้งค่าให้ใช้ Profile ตามที่กำหนด
-    current_folder = os.getcwd()
-    profile_path = os.path.join(current_folder, profile_name)
+    # ตั้งค่าให้ใช้ Profile ตามที่กำหนด (ตรวจชื่อกัน path traversal ก่อน)
+    try:
+        profile_path = safe_profile_path(profile_name)
+    except ValueError as e:
+        print(f"❌ {e}")
+        return
 
     options = Options()
     options.add_argument(f"user-data-dir={profile_path}")

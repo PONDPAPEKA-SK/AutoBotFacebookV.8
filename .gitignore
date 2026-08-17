@@ -1,12 +1,24 @@
 # Environment files (contains secrets)
 .env
+.env.*
+!.env.example
 .env.local
 .env.*.local
+secrets.json
+*.pem
+*.key
 
-# Chrome Profile (large data, machine-specific)
-bot_brain/
-bot_brain_page*/
-chrome_profile/
+# Chrome Profile (มี cookie/session ของ Facebook — ห้ามหลุดขึ้น git เด็ดขาด)
+bot_brain*/
+chrome_profile*/
+*profile*/
+# ไฟล์ที่ Chrome ใช้เก็บ credential โดยตรง (เผื่อ profile ไปโผล่ที่อื่น)
+Cookies
+Cookies-journal
+Login Data
+Login Data-journal
+Local State
+Web Data
 
 # Python
 __pycache__/
@@ -19,9 +31,12 @@ env/
 .venv/
 
 # Logs and temp files
+# (logs/ มี screenshot หน้าจอ Facebook ตอน error ด้วย — อาจติดข้อมูลส่วนตัว)
 logs/
 *.log
+*.png
 daily_schedule.json
+daily_schedule.json.tmp
 bot_log.txt
 
 # Media and output folders
