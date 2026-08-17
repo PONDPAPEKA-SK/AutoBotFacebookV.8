@@ -14,6 +14,7 @@ load_dotenv()
 
 try:
     from uploader import FacebookReelsBot
+    from logger import redact_secrets
     from report import save_report
     from daily_scheduler import (
         get_schedule_for_today, get_next_task, mark_task_done,
@@ -121,7 +122,8 @@ def send_telegram_msg(message):
         data = {"chat_id": chat_id, "text": message}
         requests.post(url, data=data, timeout=10)
     except Exception as e:
-        print(f"⚠️ Telegram ส่งไม่ได้: {e}")
+        # ห้าม print exception ดิบๆ — requests จะแปะ URL (ที่มี token) มาด้วย
+        print(f"⚠️ Telegram ส่งไม่ได้: {redact_secrets(e)}")
 
 def load_config():
     try:
@@ -342,7 +344,13 @@ def run_quota_mode(bot, dry_run=False, max_tasks=None):
         task, task_idx = get_next_task(schedule)
         
         if task:
-            page_idx = task["page_index"]
+            # page_index มาจากไฟล์ daily_schedule.json ซึ่งแก้ไขจากภายนอกได้
+            # ต้องตรวจขอบเขตก่อนเสมอ ไม่งั้นค่าติดลบจะวนไปโพสต์ผิดเพจ
+            page_idx = task.get("page_index")
+            if not isinstance(page_idx, int) or not (0 <= page_idx < len(PAGE_MAPPINGS)):
+                print(f"[SKIP] page_index ไม่ถูกต้อง: {page_idx!r} (ข้าม task นี้)")
+                mark_task_done(schedule, task_idx, False, "Invalid page_index")
+                continue
             page_data = PAGE_MAPPINGS[page_idx]
             
             print(f"\n[{task['time']}] Task: {task['page_name']} (#{task.get('quota_number', '?')})")

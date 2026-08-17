@@ -1,9 +1,46 @@
 import os
 import glob
+import re
 from datetime import datetime
 
 # จำนวนไฟล์ log สูงสุดที่เก็บไว้ (เก่าสุดจะถูกลบ)
 MAX_LOG_FILES = 30
+
+# รูปแบบ Telegram bot token: <digits>:<35 ตัวอักษร>
+# หมายเหตุ: ห้ามใส่ \b ข้างหน้า เพราะใน URL จริงจะเป็น ".../bot8429667497:AA..."
+# ซึ่ง "bot" กับตัวเลขติดกันเป็นคำเดียว ทำให้ \b ไม่ match
+_TELEGRAM_TOKEN_RE = re.compile(r"\d{6,12}:[A-Za-z0-9_-]{30,}")
+
+
+def redact_secrets(text):
+    """ตัดค่าลับออกจากข้อความก่อน print/เขียนลง log
+
+    สำคัญมาก: exception ของ requests จะแปะ URL เต็มๆ มาด้วย ซึ่ง URL ของ
+    Telegram API มี bot token อยู่ในนั้น (https://api.telegram.org/bot<TOKEN>/...)
+    ถ้า print ตรงๆ = token หลุดลง log/หน้าจอ dashboard ทันที
+    """
+    if not text:
+        return text
+    text = str(text)
+
+    # ลำดับสำคัญมาก! ต้องตัด token แบบ pattern ก่อน
+    # ถ้าเอา chat_id (ตัวเลขสั้นๆ) ไปแทนก่อน มันจะไปโดนตัวเลขที่อยู่กลาง token
+    # ทำให้ token ขาดเป็นท่อน แล้ว regex จับไม่ได้ → token หลุดบางส่วน
+    # 1) ตัดอะไรก็ตามที่หน้าตาเหมือน Telegram token
+    text = _TELEGRAM_TOKEN_RE.sub("<REDACTED_TOKEN>", text)
+
+    # 2) ตัด token ที่รู้ค่าแน่นอนจาก environment (เผื่อรูปแบบไม่ตรง pattern)
+    token = os.getenv("TELEGRAM_TOKEN", "").strip()
+    if token and len(token) >= 8:
+        text = text.replace(token, "<TELEGRAM_TOKEN>")
+
+    # 3) chat_id เป็นตัวเลขสั้น — ต้องแทนเฉพาะตอนที่ยืนอยู่เดี่ยวๆ
+    #    ไม่งั้นจะไปโดนตัวเลขอื่นที่บังเอิญมี chat_id เป็นส่วนหนึ่ง
+    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    if chat_id and len(chat_id) >= 5:
+        text = re.sub(rf"(?<!\d){re.escape(chat_id)}(?!\d)", "<TELEGRAM_CHAT_ID>", text)
+
+    return text
 
 class BotLogger:
     def __init__(self, log_dir="logs"):
@@ -38,7 +75,7 @@ class BotLogger:
     def log(self, message):
         """Prints message with timestamp + เขียนลงไฟล์"""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        line = f"[{timestamp}] {message}"
+        line = redact_secrets(f"[{timestamp}] {message}")
         print(line)
         self._write_to_file(line)
 
@@ -48,7 +85,7 @@ class BotLogger:
         Returns screenshot path if saved, else None.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        line = f"[ERROR] [{timestamp}] {message}"
+        line = redact_secrets(f"[ERROR] [{timestamp}] {message}")
         print(line)
         self._write_to_file(line)
 

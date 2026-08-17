@@ -1,5 +1,6 @@
 import time
 import os
+import re
 import shutil
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -8,6 +9,29 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from logger import BotLogger
+
+# ชื่อ profile ที่ยอมรับได้: ตัวอักษร/ตัวเลข/ขีด/ขีดล่าง เท่านั้น
+_SAFE_PROFILE_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def safe_profile_path(profile_name, base_dir=None):
+    """แปลงชื่อ profile เป็น path ที่ปลอดภัย
+
+    กัน path traversal: ถ้าปล่อยให้ใส่ค่าอย่าง "../../Desktop" ตรงๆ
+    Chrome จะไปสร้าง/เขียนทับ profile นอกโฟลเดอร์โปรเจกต์ และ cookie
+    ของ Facebook จะไปโผล่ในที่ที่ .gitignore คุมไม่ถึง
+    """
+    if not _SAFE_PROFILE_RE.match(str(profile_name or "")):
+        raise ValueError(
+            f"ชื่อ profile ไม่ถูกต้อง: {profile_name!r} "
+            "(ใช้ได้เฉพาะ A-Z a-z 0-9 _ - และยาวไม่เกิน 64 ตัว)"
+        )
+    base_dir = os.path.abspath(base_dir or os.getcwd())
+    path = os.path.abspath(os.path.join(base_dir, profile_name))
+    if os.path.commonpath([base_dir, path]) != base_dir:
+        raise ValueError(f"profile path หลุดออกนอกโฟลเดอร์โปรเจกต์: {path}")
+    return path
+
 
 class FacebookReelsBot:
     def __init__(self, config, profile_name="bot_brain"):
@@ -43,10 +67,12 @@ class FacebookReelsBot:
         self.log(f">>> กำลังเปิด Chrome (Profile: {self.profile_name})...")
         try:
             options = webdriver.ChromeOptions()
-            # ใช้ profile แยกแต่ละเพจ
-            profile_path = os.path.join(os.getcwd(), self.profile_name)
+            # ใช้ profile แยกแต่ละเพจ (ตรวจชื่อกัน path traversal ก่อน)
+            profile_path = safe_profile_path(self.profile_name)
             options.add_argument(f"user-data-dir={profile_path}")
-            options.add_experimental_option("detach", True)
+            # detach=False: ไม่ปล่อยให้ Chrome ที่ล็อกอิน Facebook ค้างเปิดทิ้งไว้
+            # หลังสคริปต์จบ (ใครมานั่งหน้าเครื่องต่อก็ใช้ session ได้เลย)
+            options.add_experimental_option("detach", False)
             options.add_argument("--disable-notifications")
 
             self.driver = webdriver.Chrome(options=options)
